@@ -10,12 +10,14 @@ class Logger(object):
         self._log += s + end
 
     def execute(self, command):
-        run_result = subprocess.run(command, shell=True, check=False,
-                                    capture_output=True)
+        try:
+            run_result = subprocess.run(command, shell=True, check=True,
+                                        capture_output=True)
+        except 
         self._log += 'running command: "' + command + '"\n'
         self._log += 'command output: \n'
-        self._log += 'stdout: \n' + ('None' if not run_result.stdout else str(run_result.stdout))
-        self._log += 'stderr: \n' + ('None' if not run_result.stderr else str(run_result.stderr))
+        self._log += 'stdout: \n' + ('None' if not run_result.stdout else run_result.stdout)
+        self._log += 'stderr: \n' + ('None' if not run_result.stderr else run_result.stderr)
 
     def log(self):
         return self._log
