@@ -1,0 +1,7 @@
+import subprocess
+
+raw_data_dir = './raw_data'
+
+subprocess.run("python3 extract_tests.py {} {} {}".format(archive, '-o ' + dest, add_input),
+               shell=True, check=True)
+ 
