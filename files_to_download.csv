@@ -1,0 +1,5 @@
+download_link,filename,description
+https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/005/845/GCF_000005845.2_ASM584v2/GCF_000005845.2_ASM584v2_genomic.fna.gz,ecoli_parental_ref.fna,'Reference sequence of the parental (unevolved not resistant to antibiotics) E. coli strain: .fasta'
+https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/005/845/GCF_000005845.2_ASM584v2/GCF_000005845.2_ASM584v2_genomic.gff.gz,ecoli_parental_ref_annotation.gff,'Annotation to the parential E.coli: .gff'
+https://figshare.com/ndownloader/files/23769689,amp_res_1.fastq,'Illumina sequencing reads from shotgun sequencing of an E. coli strain that is resistant to the antibiotic ampicillin: forward'
+https://figshare.com/ndownloader/files/23769692,amp_res_2.fastq,'Illumina sequencing reads from shotgun sequencing of an E. coli strain that is resistant to the antibiotic ampicillin: reverse'
