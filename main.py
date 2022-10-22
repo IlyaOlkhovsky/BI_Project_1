@@ -90,8 +90,35 @@ def inspect_raw_data_fastq(data_dir, fastq_files, logger):
     logger.write('Done.\n')
         
 def trim_reads(data_dir, fastq_files, logger):
-    pass
+    logger.write('-----Trimming reads with Trimmomatic...')
+    command_output, _ = logger.execute('which trimmomatic', can_crash=True)
+    if not command_output:
+        logger.write('trimmomatic not found. You need to install it. Cannot proceed. Aborting')
+        exit(0)
 
+    output_dir = './trimmomatic_output'
+    if not os.path.exists(output_dir):
+        os.mkdir(output_dir)
+
+    if not os.path.exists('./TruSeq3-PE.fa'):
+        logger.write('file TruSeq3-PE.fa not found in current directory. Aborting')
+        
+    logger.execute('trimmomatic PE -phred33 {input_files} {output_files} {adaptor} LEADING:{leading} TRAILING:{trailing} SLIDINGWINDOW:{sliding_window_1}:{sliding_window2} MINLEN:{minlen}'.format(input_files=' '.join(os.path.join(data_dir, input_file)
+                                                                                                                                                                                                                         for input_file in fastq_files),
+                                                                                                                                                                                                    output_files=' '.join(os.path.join(output_dir, output_file)
+                                                                                                                                                                                                                          for output_file in ['output_forward_paired.fq',
+                                                                                                                                                                                                                                              'output_forward_unpaired.fq',
+                                                                                                                                                                                                                                              'output_reverse_paired.fq.gz',
+                                                                                                                                                                                                                                              'output_reverse_unpaired.fq.gz']),
+                                                                                                                                                                                                    adaptor='ILLUMINACLIP:TruSeq3-PE.fa:2:30:10',
+                                                                                                                                                                                                    leading=20,
+                                                                                                                                                                                                    trailing=20,
+                                                                                                                                                                                                    sliding_window_1=10,
+                                                                                                                                                                                                    sliding_window2=20,
+                                                                                                                                                                                                    minlen=20))
+                                                                                                                                                                                                    
+    logger.write('Done.\n')
+    logger.write('WHY 4 FILES ARE PRODUCED? TWO IS ENOUGH')
 
 def main():
     raw_data_dir = './raw_data'
@@ -103,6 +130,7 @@ def main():
     inspect_raw_data_fastq(raw_data_dir, fastq_files, logger)
 
     trim_reads(raw_data_dir, fastq_files, logger)
+    inspect_trimmed_data_fastq(raw_data_dir, fastq_files, logger)
     
 
 if __name__ == "__main__":
