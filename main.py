@@ -40,26 +40,23 @@ class Logger(object):
         return (run_result.stdout, run_result.stderr)
 
 
-def get_raw_data(csv_file_list, output_dir, logger):
+def get_raw_data(file_list, output_dir, logger):
     logger.write('-----Getting raw data...\n')
     if not os.path.exists(output_dir):
         os.mkdir(output_dir)
         
-    with open(csv_file_list) as inp:
-        _ = next(inp)
-        for line in inp:
-            download_link, filename, description = line.strip().split(',')
-            logger.write('Getting ' + filename + '\n')
-            
-            full_filename = os.path.join(output_dir, filename)
-            if os.path.exists(full_filename):
-                logger.write('File already exists, passing\n')
-            else:
-                if not os.path.exists(full_filename + '.gz'):
-                    logger.execute('wget -O {} {}'.format(full_filename + '.gz',
-                                                          download_link))
+    for filename in file_list:
+        logger.write('Getting ' + filename + '\n')
+        
+        full_filename = os.path.join(output_dir, filename)
+        if os.path.exists(full_filename):
+            logger.write('File already exists, passing\n')
+        else:
+            if not os.path.exists(full_filename + '.gz'):
+                logger.execute('wget -O {} {}'.format(full_filename + '.gz',
+                                                      download_link))
                 logger.execute('gzip -d {}'.format(full_filename + '.gz'))
-
+                
     logger.write('Done.\n')
 
 
@@ -72,8 +69,8 @@ def inspect_raw_data(data_dir, fastq_files, logger):
 
     logger.write('Done.\n')
 
-def inspect_raw_data_fastq(data_dir, fastq_files, logger):
-    logger.write('----Inspecting raw data with fastq...')
+def inspect_data_fastq(data_dir, fastq_files, logger, log_message):
+    logger.write(log_message)
     command_output, _ = logger.execute('which fastqc', can_crash=True)
     if not command_output:
         logger.write('fastqc not found. You need to install it. Cannot proceed. Aborting')
@@ -124,30 +121,49 @@ def trim_reads(data_dir, fastq_files, logger, trimmomatic_path):
                            for input_file in fastq_files)
     
     output_files = ' '.join(os.path.join('./trimmomatic_output', output_file)
-                            for output_file in ['output_forward_paired.fq.gz',
-                                                'output_forward_unpaired.fq.gz',
-                                                'output_reverse_paired.fq.gz',
-                                                'output_reverse_unpaired.fq.gz'])
-        
-    format_string = ' '.join(['{trimmomatic_runner} PE -phred33',
-                              '{input_files}',
-                              '{output_files}',
-                              '{adaptor}',
-                              'LEADING:{leading}',
-                              'TRAILING:{trailing}',
-                              'SLIDINGWINDOW:{sliding_window_1}:{sliding_window_2}',
-                              'MINLEN:{minlen}'])
+                            for output_file in ['output_forward_paired.fq',
+                                                'output_forward_unpaired.fq',
+                                                'output_reverse_paired.fq',
+                                                'output_reverse_unpaired.fq'])
+    if all(map(os.path.exists, output_files.split())):
+        logger.write('Output files already exist. Passing.')
+    else:
+        format_string = ' '.join(['{trimmomatic_runner} PE -phred33',
+                                  '{input_files}',
+                                  '{output_files}',
+                                  '{adaptor}',
+                                  'LEADING:{leading}',
+                                  'TRAILING:{trailing}',
+                                  'SLIDINGWINDOW:{sliding_window_1}:{sliding_window_2}',
+                                  'MINLEN:{minlen}'])
 
-    logger.execute(format_string.format(trimmomatic_runner=trimmomatic_runner,
-                                        input_files=input_files,
-                                        output_files=output_files,
-                                        adaptor=adaptor,
-                                        leading=20,
-                                        trailing=20,
-                                        sliding_window_1=10,
-                                        sliding_window_2=20,
-                                        minlen=20))
+        logger.execute(format_string.format(trimmomatic_runner=trimmomatic_runner,
+                                            input_files=input_files,
+                                            output_files=output_files,
+                                            adaptor=adaptor,
+                                            leading=20,
+                                            trailing=20,
+                                            sliding_window_1=10,
+                                            sliding_window_2=20,
+                                            minlen=20))
+    logger.write('Done.')
                                                                                                                                                                                                     
+def check_trimmed_reads_count(trimmomatic_output_dir, logger):
+    logger.write('-----Checking trimmed reads count...')
+    logger.execute('zcat {} | wc -l'.format(os.path.join(trimmomatic_output_dir,
+                                                         'output_forward_paired.fq.gz')))
+
+def index_reference_file(ref_genome_file, logger):
+    logger.write('-----Indexing reference file...')
+    command_output, _ = logger.execute('which bwa', can_crash=True)
+    if not command_output:
+        logger.write('bwa not found. You need to install it. Cannot proceed. Aborting')
+        exit(0)
+    
+    logger.execute('bwa index {} &'.format(ref_genome_file))
+    logger.write('Done.')
+
+
 def get_command_line_args():
     parser = argparse.ArgumentParser(description="Script for finding mutations in DNA")
     parser.add_argument('--trimmomatic', default=None,
@@ -163,21 +179,34 @@ def main():
     if not os.path.exists('files_to_download.csv'):
         print('Cannot find file "files_to_download.csv". Cannot Proceed. Aborting')
         
+    # get filenames
+    fastq_files = []
+    ref_genome_file = None
     with open('files_to_download.csv') as f:
         lines_words = iter(line.strip().split(',') for line in f)
         next(lines_words)
-        fastq_files = [filename for _, filename, _ in lines_words
-                       if os.path.splitext(filename)[1] == '.fastq']
+        for _, filename, _ in lines_words:
+            ext = os.path.splitext(filename)[1] 
+            if ext == '.fastq':
+                fastq_files.append(filename)
+            if ext == '.fna':
+                ref_genome_file = filename
         
     logger = Logger()
-    get_raw_data('files_to_download.csv', raw_data_dir, logger)
+    get_raw_data(fastq_files + [ref_genome_file],
+                 raw_data_dir, logger)
 
     inspect_raw_data(raw_data_dir, fastq_files, logger)
-    inspect_raw_data_fastq(raw_data_dir, fastq_files, logger)
+    inspect_data_fastq(raw_data_dir, fastq_files, logger,
+                       '----Inspecting raw data with fastqc...')
 
     trim_reads(raw_data_dir, fastq_files, logger, args.trimmomatic)
-    inspect_trimmed_data_fastq(raw_data_dir, fastq_files, logger)
+    check_trimmed_reads_count('./trimmomatic_output', logger)
+    trimmed_files = ['output_forward_paired.fq', 'output_reverse_paired.fq']
+    inspect_data_fastq('./trimmomatic_output', trimmed_files, logger,
+                       '-----Inspecting trimmed data with fastqc...')
+    index_reference_file(os.path.join('./raw_data', ref_genome_file),
+                         logger)
     
-
 if __name__ == "__main__":
     main()
