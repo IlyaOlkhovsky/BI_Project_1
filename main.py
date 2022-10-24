@@ -1,5 +1,6 @@
 import subprocess
 import os
+import argparse
 
 
 class Logger(object):
@@ -89,47 +90,92 @@ def inspect_raw_data_fastq(data_dir, fastq_files, logger):
 
     logger.write('Done.\n')
         
-def trim_reads(data_dir, fastq_files, logger):
+def trim_reads(data_dir, fastq_files, logger, trimmomatic_path):
     logger.write('-----Trimming reads with Trimmomatic...')
+
+    # checking that necessary files exist
     command_output, _ = logger.execute('which trimmomatic', can_crash=True)
-    if not command_output:
+    if not command_output and not trimmomatic_path:
         logger.write('trimmomatic not found. You need to install it. Cannot proceed. Aborting')
         exit(0)
 
-    output_dir = './trimmomatic_output'
-    if not os.path.exists(output_dir):
-        os.mkdir(output_dir)
 
-    if not os.path.exists('./TruSeq3-PE.fa'):
-        logger.write('file TruSeq3-PE.fa not found in current directory. Aborting')
+    if not os.path.exists('./TruSeq3-PE.fa') and not trimmomatic_path:
+        logger.write('file TruSeq3-PE.fa not found. Aborting')
         
-    logger.execute('trimmomatic PE -phred33 {input_files} {output_files} {adaptor} LEADING:{leading} TRAILING:{trailing} SLIDINGWINDOW:{sliding_window_1}:{sliding_window2} MINLEN:{minlen}'.format(input_files=' '.join(os.path.join(data_dir, input_file)
-                                                                                                                                                                                                                         for input_file in fastq_files),
-                                                                                                                                                                                                    output_files=' '.join(os.path.join(output_dir, output_file)
-                                                                                                                                                                                                                          for output_file in ['output_forward_paired.fq',
-                                                                                                                                                                                                                                              'output_forward_unpaired.fq',
-                                                                                                                                                                                                                                              'output_reverse_paired.fq.gz',
-                                                                                                                                                                                                                                              'output_reverse_unpaired.fq.gz']),
-                                                                                                                                                                                                    adaptor='ILLUMINACLIP:TruSeq3-PE.fa:2:30:10',
-                                                                                                                                                                                                    leading=20,
-                                                                                                                                                                                                    trailing=20,
-                                                                                                                                                                                                    sliding_window_1=10,
-                                                                                                                                                                                                    sliding_window2=20,
-                                                                                                                                                                                                    minlen=20))
+
+    # configuring trimmomatic arguments
+    if os.path.exists('./TruSeq3-PE.fa'):
+        adaptor_path = 'TruSeq3-PE.fa'
+    else:
+        adaptor_path = os.path.join(os.path.split(trimmomatic_path)[0],
+                                    'adaptors', 'TruSeq3-PE.fa')
+
+    adaptor = 'ILLUMINACLIP:{}:2:30:10'.format(adaptor_path)
+    
+
+    if trimmomatic_path:
+        trimmomatic_runner = 'java -jar {}'.format(trimmomatic_path)
+    else:
+        trimmomatic_runner = 'trimmomatic'
+
+        
+    input_files = ' '.join(os.path.join(data_dir, input_file)
+                           for input_file in fastq_files)
+    
+    output_files = ' '.join(os.path.join('./trimmomatic_output', output_file)
+                            for output_file in ['output_forward_paired.fq.gz',
+                                                'output_forward_unpaired.fq.gz',
+                                                'output_reverse_paired.fq.gz',
+                                                'output_reverse_unpaired.fq.gz'])
+        
+    format_string = ' '.join(['{trimmomatic_runner} PE -phred33',
+                              '{input_files}',
+                              '{output_files}',
+                              '{adaptor}',
+                              'LEADING:{leading}',
+                              'TRAILING:{trailing}',
+                              'SLIDINGWINDOW:{sliding_window_1}:{sliding_window_2}',
+                              'MINLEN:{minlen}'])
+
+    logger.execute(format_string.format(trimmomatic_runner=trimmomatic_runner,
+                                        input_files=input_files,
+                                        output_files=output_files,
+                                        adaptor=adaptor,
+                                        leading=20,
+                                        trailing=20,
+                                        sliding_window_1=10,
+                                        sliding_window_2=20,
+                                        minlen=20))
                                                                                                                                                                                                     
-    logger.write('Done.\n')
-    logger.write('WHY 4 FILES ARE PRODUCED? TWO IS ENOUGH')
+def get_command_line_args():
+    parser = argparse.ArgumentParser(description="Script for finding mutations in DNA")
+    parser.add_argument('--trimmomatic', default=None,
+                        help='path to the trimmomatic jar file. If not specified, "trimmomatic" command is used')
+    args =  parser.parse_args()
+    return args
+
 
 def main():
+    args = get_command_line_args()
     raw_data_dir = './raw_data'
-    fastq_files = ['amp_res_1.fastq', 'amp_res_2.fastq']
+    
+    if not os.path.exists('files_to_download.csv'):
+        print('Cannot find file "files_to_download.csv". Cannot Proceed. Aborting')
+        
+    with open('files_to_download.csv') as f:
+        lines_words = iter(line.strip().split(',') for line in f)
+        next(lines_words)
+        fastq_files = [filename for _, filename, _ in lines_words
+                       if os.path.splitext(filename)[1] == '.fastq']
+        
     logger = Logger()
     get_raw_data('files_to_download.csv', raw_data_dir, logger)
 
     inspect_raw_data(raw_data_dir, fastq_files, logger)
     inspect_raw_data_fastq(raw_data_dir, fastq_files, logger)
 
-    trim_reads(raw_data_dir, fastq_files, logger)
+    trim_reads(raw_data_dir, fastq_files, logger, args.trimmomatic)
     inspect_trimmed_data_fastq(raw_data_dir, fastq_files, logger)
     
 
