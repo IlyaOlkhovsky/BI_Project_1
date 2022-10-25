@@ -93,7 +93,9 @@ def trim_reads(data_dir, fastq_files, logger, trimmomatic_path):
     # checking that necessary files exist
     command_output, _ = logger.execute('which trimmomatic', can_crash=True)
     if not command_output and not trimmomatic_path:
-        logger.write('trimmomatic not found. You need to install it. Cannot proceed. Aborting')
+        logger.write('\n'.join(['trimmomatic not found.',
+                                'You need to install it or specify the path to a jar file.',
+                                'Cannot proceed. Aborting']))
         exit(0)
 
 
@@ -160,14 +162,115 @@ def index_reference_file(ref_genome_file, logger):
         logger.write('bwa not found. You need to install it. Cannot proceed. Aborting')
         exit(0)
     
-    logger.execute('bwa index {} &'.format(ref_genome_file))
+    logger.execute('bwa index {}'.format(ref_genome_file))
     logger.write('Done.')
+
+
+
+def align_reads(ref_genome_file, reads_files, output_file, logger):
+    logger.write('-----Aligning reads...')
+    if os.path.exists(output_file):
+        logger.write('File {} already exists. Passing'.format(output_file))
+    else:
+        command_format = 'bwa mem {ref} {reads_forward} {reads_backward} -o {out}' 
+        logger.execute(command_format.format(ref=ref_genome_file,
+                                             reads_forward=reads_files[0],
+                                             reads_backward=reads_files[1],
+                                             out=output_file))
+    logger.write('Done.')
+
+    
+def compress_sam_file(filename, logger):
+    logger.write('-----Compressing {}...'.format(filename))
+    # good to check that samtools is intalled
+    file_no_ext = os.path.splitext(filename)[0]
+    new_file = file_no_ext + '.bam'
+    if os.path.exists(new_file):
+        logger.write('File {} already exists. Passing'.format(new_file))
+    else:
+        command_format = 'samtools view -S -b {file_no_ext}.sam > {file_no_ext}.bam'
+        logger.execute(command_format.format(file_no_ext=os.path.splitext(filename)[0]))
+    logger.write('Done.')
+
+
+def get_basic_info_aligning(filename, logger):
+    logger.write('-----Gathering basic statistics in {}...'.format(filename))
+    logger.execute('samtools flagstat {}'.format(filename))
+    logger.write('Done.')
+
+    
+def sort_and_index_bam_file(filename, logger):
+    logger.write('-----Sorting and indexing {}...'.format(filename))
+    file_no_ext = os.path.splitext(filename)[0]
+    sorted_file = file_no_ext + '_sorted' + '.bam'
+    logger.execute('samtools sort {} -o {}'.format(filename,
+                                                   sorted_file))
+    logger.execute('samtools index {}'.format(sorted_file))
+    logger.write('Done.')
+
+
+def variant_calling(ref_genome_file, sorted_alignment, output_file_pref,
+                    varscan_path, logger):
+    logger.write('-----Variant calling...')
+
+    command_output, _ = logger.execute('which varscan', can_crash=True)
+    if not command_output and not varscan_path:
+        logger.write('\n'.join(['varscan not found.',
+                                'You need to install it or specify the path to a jar file.',
+                                'Cannot proceed. Aborting']))
+        exit(0)
+
+    if varscan_path:
+        varscan_runner = 'java -jar {}'.format(varscan_path)
+    else:
+        varscan_runner = 'varscan'
+        
+    command_format = 'samtools mpileup -f {ref} {alignment} > {out}'
+    interm_file = 'my.mpileup'
+    if os.path.exists(interm_file):
+        logger.write('File {} already exists. Passing'.format(interm_file))
+    else:
+        logger.execute(command_format.format(ref=ref_genome_file,
+                                             alignment=sorted_alignment,
+                                             out=interm_file))
+
+    output_file_snp = output_file_pref + '_snp.vcf'
+    command_format = ' '.join(['{varscan_runner} mpileup2snp {inp}',
+                               '--min-var-freq {min_freq}',
+                               '--variants --output-vcf 1',
+                               '> {out}'])
+
+    if os.path.exists(output_file_snp):
+        logger.write('File {} already exists. Passing'.format(output_file_snp))
+    else:
+        logger.execute(command_format.format(varscan_runner=varscan_runner,
+                                             inp=interm_file,
+                                             min_freq=0.2, # need to choose this parameter more carefully
+                                             out=output_file_snp))
+
+    output_file_indel = output_file_pref + '_indel.vcf'
+    command_format = ' '.join(['{varscan_runner} mpileup2indel {inp}',
+                               '--min-var-freq {min_freq}',
+                               '--variants --output-vcf 1',
+                               '> {out}'])
+
+    if os.path.exists(output_file_indel):
+        logger.write('File {} already exists. Passing'.format(output_file_indel))
+    else:
+        logger.execute(command_format.format(varscan_runner=varscan_runner,
+                                             inp=interm_file,
+                                             min_freq=0.2, # need to choose this parameter more carefully
+                                             out=output_file_indel))
+
+    logger.write('Done')
 
 
 def get_command_line_args():
     parser = argparse.ArgumentParser(description="Script for finding mutations in DNA")
     parser.add_argument('--trimmomatic', default=None,
                         help='path to the trimmomatic jar file. If not specified, "trimmomatic" command is used')
+    parser.add_argument('--varscan', default=None,
+                        help='path to the varscan jar file. If not specified, "varscan" command is used')
     args =  parser.parse_args()
     return args
 
@@ -191,6 +294,7 @@ def main():
                 fastq_files.append(filename)
             if ext == '.fna':
                 ref_genome_file = filename
+    ref_genome_file_full = os.path.join('./raw_data', ref_genome_file)
         
     logger = Logger()
     get_raw_data(fastq_files + [ref_genome_file],
@@ -205,8 +309,21 @@ def main():
     trimmed_files = ['output_forward_paired.fq', 'output_reverse_paired.fq']
     inspect_data_fastq('./trimmomatic_output', trimmed_files, logger,
                        '-----Inspecting trimmed data with fastqc...')
-    index_reference_file(os.path.join('./raw_data', ref_genome_file),
+    index_reference_file(ref_genome_file_full, 
                          logger)
+    align_reads(ref_genome_file_full,
+                [os.path.join('./trimmomatic_output', filename)
+                 for filename in trimmed_files],
+                'alignment.sam', logger)
+    compress_sam_file('alignment.sam', logger)
+    get_basic_info_aligning('alignment.bam', logger)
+    sort_and_index_bam_file('alignment.bam', logger)
+    variant_calling(ref_genome_file_full,
+                    'alignment_sorted.bam',
+                    'VarScan_results',
+                    args.varscan,
+                    logger)
+    
     
 if __name__ == "__main__":
     main()
