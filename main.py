@@ -45,7 +45,7 @@ def get_raw_data(file_list, output_dir, logger):
     if not os.path.exists(output_dir):
         os.mkdir(output_dir)
         
-    for filename in file_list:
+    for filename, download_link in file_list:
         logger.write('Getting ' + filename + '\n')
         
         full_filename = os.path.join(output_dir, filename)
@@ -283,12 +283,14 @@ def main():
         print('Cannot find file "files_to_download.csv". Cannot Proceed. Aborting')
         
     # get filenames
+    download_list = []
     fastq_files = []
     ref_genome_file = None
     with open('files_to_download.csv') as f:
         lines_words = iter(line.strip().split(',') for line in f)
         next(lines_words)
-        for _, filename, _ in lines_words:
+        for download_link, filename, _ in lines_words:
+            download_list.append((filename, download_link))
             ext = os.path.splitext(filename)[1] 
             if ext == '.fastq':
                 fastq_files.append(filename)
@@ -297,7 +299,7 @@ def main():
     ref_genome_file_full = os.path.join('./raw_data', ref_genome_file)
         
     logger = Logger()
-    get_raw_data(fastq_files + [ref_genome_file],
+    get_raw_data(download_list,
                  raw_data_dir, logger)
 
     inspect_raw_data(raw_data_dir, fastq_files, logger)
