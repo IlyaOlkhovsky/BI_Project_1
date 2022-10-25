@@ -101,7 +101,6 @@ def trim_reads(data_dir, fastq_files, logger, trimmomatic_path):
 
     if not os.path.exists('./TruSeq3-PE.fa') and not trimmomatic_path:
         logger.write('file TruSeq3-PE.fa not found. Aborting')
-        
 
     # configuring trimmomatic arguments
     if os.path.exists('./TruSeq3-PE.fa'):
@@ -122,11 +121,15 @@ def trim_reads(data_dir, fastq_files, logger, trimmomatic_path):
     input_files = ' '.join(os.path.join(data_dir, input_file)
                            for input_file in fastq_files)
     
+    if not os.path.exists('./trimmomatic_output'):
+        os.mkdir('./trimmomatic_output')
+        
     output_files = ' '.join(os.path.join('./trimmomatic_output', output_file)
                             for output_file in ['output_forward_paired.fq',
                                                 'output_forward_unpaired.fq',
                                                 'output_reverse_paired.fq',
                                                 'output_reverse_unpaired.fq'])
+
     if all(map(os.path.exists, output_files.split())):
         logger.write('Output files already exist. Passing.')
     else:
