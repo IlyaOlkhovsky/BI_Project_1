@@ -108,7 +108,7 @@ def trim_reads(data_dir, fastq_files, logger, trimmomatic_path):
         adaptor_path = 'TruSeq3-PE.fa'
     else:
         adaptor_path = os.path.join(os.path.split(trimmomatic_path)[0],
-                                    'adaptors', 'TruSeq3-PE.fa')
+                                    'adapters', 'TruSeq3-PE.fa')
 
     adaptor = 'ILLUMINACLIP:{}:2:30:10'.format(adaptor_path)
     
