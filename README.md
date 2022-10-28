@@ -16,5 +16,3 @@ The input data for our tool consists of a single file in `.fna` format with a re
  --ref_genome REF_GENOME --reads_forward READS_FORWARD --reads_reverse READS_REVERSE
 ```
 The result of the latter command is the `.vcf` files with the VarScan output, which can be found in the `varscan_output` folder. These can then be used with [IGV](https://software.broadinstitute.org/software/igv/) to view the sequenced reads alignment on the reference genome and putative mutations.
-## Corresponding links
- - [Analysis
