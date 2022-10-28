@@ -1,6 +1,6 @@
 # Bioinformatics Institute Project 1: mutations identification
 Navigation:
- - `/EColi` directory: lab journal of the localization of mutations responsible for the antibiotic resistance property in E.Coli and supplementory materials.
+ - `/EColi` directory: lab journal of the localization of mutations responsible for the antibiotic resistance property in E.Coli and supplementary materials.
  - `/tool` directory: source code of the script automating the pipeline from the lab journal, developed to ease the analysis of mutations in bacterial genomes.
 ## Requeirements
 The following packages need to be installed for our tool to work correctly:
