@@ -112,12 +112,6 @@ class Config(object):
         else:
             self.varscan_runner = 'varscan'
 
-    def configure_snpEff(self):
-        if self.path_to_snpEff:
-            self.snpEff_runner = 'java -jar {}'.format(self.path_to_snpEff)
-        else:
-            self.snpEff_runner = 'snpEff'
-
 
     def __init__(self, *,
                  log_file_name,
@@ -128,19 +122,14 @@ class Config(object):
                  path_to_trimmomatic=None,
                  path_to_varscan=None,
                  path_to_bwa=None,
-                 path_to_snpEff=None,
                  fastqc_output_dir,
                  trimmomatic_output_dir,
                  bwa_output_dir,
                  varscan_output_dir,
-                 snpEff_data_dir,
                  trimmomatic_adaptor_file=None,
                  alignment_file,
                  varscan_interm_file,
-                 varscan_result_pref,
-                 snpEff_result_file,
-                 ref_genome_ann,
-                 file_for_snpEff):
+                 varscan_result_pref):
 
         self.logger = Logger(log_file_name)
         self.ref_genome_file = ref_genome_file
@@ -150,13 +139,9 @@ class Config(object):
         self.path_to_trimmomatic = path_to_trimmomatic
         self.path_to_varscan = path_to_varscan
         self.path_to_bwa = path_to_bwa
-        self.path_to_snpEff = path_to_snpEff
         self.fastqc_output_dir = fastqc_output_dir
         self.trimmomatic_output_dir = trimmomatic_output_dir
         self.varscan_output_dir = varscan_output_dir
-        self.snpEff_data_dir = snpEff_data_dir
-        self.snpEff_result_file = snpEff_result_file
-        self.ref_genome_ann = ref_genome_ann
         self.trimmomatic_adaptor_file = trimmomatic_adaptor_file
         self.bwa_output_dir = bwa_output_dir
         self.alignment_file = os.path.join(bwa_output_dir,
@@ -165,7 +150,6 @@ class Config(object):
                                                 varscan_interm_file)
         self.varscan_result_pref = os.path.join(varscan_output_dir,
                                                 varscan_result_pref)
-        self.file_for_snpEff = file_for_snpEff
 
         if not self.check_programs_existence():
             self.logger.write('Cannot proceed. Aborting')
@@ -175,7 +159,6 @@ class Config(object):
         self.configure_trimmomatic()
         self.configure_bwa()
         self.configure_varscan()
-        self.configure_snpEff()
 
 
 def inspect_raw_data(config):
@@ -304,57 +287,18 @@ def variant_calling(config):
                           target_files=[output_file_indel])
 
 
-def snpEff_annotations(config):
-    with open('snpEff.config', 'w') as snp_conf:
-        snp_conf.write('{}.genome marvelously_original_name'.format(config.snpEff_data_dir))
-
-    data_dir_full = os.path.join('./data', config.snpEff_data_dir)
-    if not os.path.exists('./data'):
-        os.mkdir('data')
-    if not os.path.exists(data_dir_full):
-        os.mkdir(data_dir_full)
-    shutil.copyfile(config.file_for_snpEff,
-                    os.path.join(data_dir_full,
-                                 'genes.gbk'))
-
-    command_format = '{snpEff_runner} build -genbank -v {data_dir}'
-    config.logger.execute(command_format.format(snpEff_runner=config.snpEff_runner,
-                                                data_dir=config.snpEff_data_dir))
-
-    command_format = '{snpEff_runner} ann {data_dir} {varscan_res_snp} > {snp_result}'
-    config.logger.execute(command_format.format(snpEff_runner=config.snpEff_runner,
-                                                data_dir=config.snpEff_data_dir,
-                                                varscan_res_snp=config.varscan_result_pref + '_snp.vcf',
-                                                snp_result=config.snpEff_result_file))
-
-
-def create_final_folder(config):
-    if not os.path.exists('./final_results'):
-        os.mkdir('final_results')
-    shutil.copyfile(config.ref_genome_file, './final_results/parental_ref.fasta')
-    shutil.copyfile(config.alignment_file_sorted, './final_results/alignment_sorted.bam')
-    shutil.copyfile(config.ref_genome_ann, './final_results/parental_ref_annotation.gff')
-    shutil.copyfile(config.snpEff_result_file, './final_results/snp_ann.vcf')
-
-
 def get_command_line_args():
     parser = argparse.ArgumentParser(description="Script for finding mutations in DNA")
     parser.add_argument('--trimmomatic', default=None,
                         help='path to the trimmomatic jar file. If not specified, "trimmomatic" command is used')
     parser.add_argument('--varscan', default=None,
                         help='path to the varscan jar file. If not specified, "varscan" command is used')
-    parser.add_argument('--snpEff', default=None,
-                        help='path to the snpEff jar file. If not specified, "snpEff" command is used')
     parser.add_argument('--ref_genome',
-                        help='path to the .fna file with reference genome', required=True)
-    parser.add_argument('--ref_genome_ann',
-                        help='path to the .gff file with reference genome annotation', required=True)
-    parser.add_argument('--seq_and_ann',
-                        help='path to the .gbff file with reference genome sequence and annotation', required=True)
+                        help='path to the .fna file with reference genome')
     parser.add_argument('--reads_forward',
-                        help='path to the .fastq file with forward read reads', required=True)
+                        help='path to the .fastq file with forward read reads')
     parser.add_argument('--reads_reverse',
-                        help='path to the .fastq file with reverse read reads', required=True)
+                        help='path to the .fastq file with reverse read reads')
 
     args = parser.parse_args()
     return args
@@ -371,18 +315,13 @@ def main():
                     sample_reads_backward_file=args.reads_reverse,
                     path_to_trimmomatic=args.trimmomatic,
                     path_to_varscan=args.varscan,
-                    path_to_snpEff=args.snpEff,
-                    snpEff_data_dir='should_be_named_as_strain_but_who_cares',
                     fastqc_output_dir='./fastqc_output',
                     trimmomatic_output_dir='./trimmomatic_output',
                     bwa_output_dir='./bwa_output',
                     alignment_file='alignment.sam',
                     varscan_output_dir='./varscan_output',
                     varscan_interm_file='my.mpileup',
-                    varscan_result_pref='VarScan_results',
-                    snpEff_result_file='./snp_ann.vcf',
-                    file_for_snpEff=args.seq_and_ann,
-                    ref_genome_ann=args.ref_genome_ann)
+                    varscan_result_pref='VarScan_results')
 
     config.logger.write('-----Inspecting raw data...')
     inspect_raw_data(config)
@@ -431,18 +370,6 @@ def main():
     config.logger.write('-----Variant calling...')
     variant_calling(config)
     config.logger.write('Done.\n')
-
-    config.logger.write('-----Creating snpEff annotations...')
-    snpEff_annotations(config)
-    config.logger.write('Done.\n')
-
-    config.logger.write('-----Creating folder with final results...')
-    create_final_folder(config)
-    config.logger.write('Done.\n')
-
-    config.logger.write(' '.join(['The script is finished.',
-                                  'All files required for visualization',
-                                  'can be found in "./final_results".']))
 
 
 if __name__ == "__main__":
